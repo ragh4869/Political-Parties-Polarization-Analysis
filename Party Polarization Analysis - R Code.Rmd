@@ -1,0 +1,406 @@
+---
+title: "Party Polarization Analysis"
+author: "Raghav Chegu Shyam Kumar"
+date: "4/5/2022"
+output: html_document
+--- 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Packages, message=FALSE, warning=FALSE, echo=FALSE}
+library(lsa)
+library(tidyverse)
+library(lattice)
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+library(stringr)
+```
+
+
+#### **Introduction:**
+
+In this project, we examine the ideological differences between the two major political parties in the United States, the Democratic Party and the Republican Party, to understand the polarization effect over time. This is achieved by examining how senators from both parties voted on bills each year from 1989 to 2014.
+
+
+
+#### **Polarization in two years:**
+
+Initially, we look for the differences between the members and vote data for 1989 and 2014 to determine the changes in the two years. This is achieved by applying the MDS on the data and analyzing for the same.
+
+
+```{r Load Data, echo=FALSE}
+# Loading Data for 1989 and 2014
+members_1989 <- read.csv("C:/Users/Hi/Desktop/STAT 670/Mini Project 2/congress/1989/members.csv")
+votes_1989 <- read.csv("C:/Users/Hi/Desktop/STAT 670/Mini Project 2/congress/1989/votes.csv")
+members_2014 <- read.csv("C:/Users/Hi/Desktop/STAT 670/Mini Project 2/congress/2014/members.csv")
+votes_2014 <- read.csv("C:/Users/Hi/Desktop/STAT 670/Mini Project 2/congress/2014/votes.csv")
+
+# Merging the members and votes data for 1989 and 2014
+fin_1989 <- merge(x = members_1989, y = votes_1989, by = "id", all = TRUE)
+fin_2014 <- merge(x = members_2014, y = votes_2014, by = "id", all = TRUE)
+```
+
+
+```{r, echo=FALSE}
+# Creating function to recode Yea and Nay votes
+recode_votes = function(vote) {
+    if(is.na(vote)) {
+        return(-1)
+    } else if(vote == "Yea") {
+        return(1)
+    } else if(vote == "Nay") {
+        return(0)
+    } else {
+        return(-1)
+    }
+}
+
+# Re-coding the votes for 1989 and 2014
+votes_numeric_1989 = apply(fin_1989[c(-1:-6)], 1:2, recode_votes)
+votes_numeric_2014 = apply(fin_2014[c(-1:-6)], 1:2, recode_votes)
+```
+
+
+```{r, echo=FALSE}
+# Calculating the euclidean distances
+d_1989<-dist(votes_numeric_1989)
+d_2014<-dist(votes_numeric_2014)
+
+
+# Applying the Multi-Dimensional Scaling (MDS) on the data
+mds_1989<-cmdscale(d_1989,k=2)
+mds_2014<-cmdscale(d_2014,k=2)
+
+fin_1989[fin_1989$party=="D",5] <- "Democrat"
+fin_1989[fin_1989$party=="R",5] <- "Republican"
+fin_2014[fin_2014$party=="D",5] <- "Democrat"
+fin_2014[fin_2014$party=="R",5] <- "Republican"
+fin_2014[fin_2014$party=="I",5] <- "Independent"
+fin_2014[fin_2014$party=="ID",5] <- "Independent"
+
+```
+
+
+```{r ,fig.width = 8, fig.height= 6, fig.align="center", echo=FALSE}
+# visualizing the MDS for 1989 Data
+ggplot(data.frame(mds_1989), aes(x = X1, y = X2, color = fin_1989$party)) +
+  geom_point() +  labs(x = "X1", y = "X2", title = "Scatter plot of projected points of Senators in 1989") + scale_color_manual(name = "Party", values = c("Democrat" = "blue", "Republican" = "red")) 
+```
+
+
+**Observations - 1989: **  
+
+- We can observe from the above graph, the Republican and Democratic parties do not have a singular point of view on the bills in 1989 with the Democratic Party in blue and the Republican Party in red. 
+- This can be observed by the spread of the points in the cluster of both parties.
+- The difference between the two clusters is more pronounced along X1 than X2, indicating that they are separated by a one-dimensional liberal/conservative axis.
+- There aren't many outliers in this sample. There is only one point that deviates significantly from the distribution.
+
+
+```{r ,fig.width = 8, fig.height= 6, fig.align="center", echo=FALSE}
+# visualizing the MDS for 2014 Data
+ggplot(data.frame(mds_2014), aes(x = X1, y = X2, color = fin_2014$party)) +
+  geom_point() +  labs(x = "X1", y = "X2", title = "Scatter plot of projected points of Senators in 2014") + scale_color_manual(name = "Party", values = c("Democrat" = "blue", "Republican" = "red", "Independent" = "green"))
+```
+
+
+**Observations - 2014:**  
+
+- The above graph shows that the Republican and Democratic parties are establishing distinct clusters suggesting that both parties have grown more ideologically cohesive in 2014. 
+- This can be observed by the low spread of the points in the cluster of both parties.
+- The difference between the two clusters is more pronounced along X1 than X2, indicating that they are separated by a one-dimensional liberal/conservative axis.
+- There aren't many outliers in this sample. There are only two-three points that deviates significantly from the distribution.
+
+
+
+**Pattern Similarity:**  
+
+- Figures 1 and 2 show the data from 1989 and 2014 respectively and they show that no similar pattern can be found between the two years.
+- Both figures demonstrates that the points lie on a one dimensional axis, that is, the liberal-conservative axis.
+- Even though both feature unique clusters, the pattern for the year 2014 is more distinct since the points are closer together.
+- This indicates that polarization has increased in 2014 compared to 1989.
+
+
+
+**Comparison of PCA and MDS:**  
+
+- It can observed that the graphs between PCA and MDS is similar especially in the 1989 graph.
+- The 2014 graph for PCA and MDS portray similarity on the cluster formation although the principal component values vary.
+- The PCA graphs are added in the appendix.
+
+
+
+
+#### **Polarization over time:**
+
+In the following analysis, we look for the change in polarization over time. This is achieved by applying MDS on the data and using the centroids, calculate the extent of the polarization if observed.
+
+```{r,  message=FALSE, warning=FALSE, echo=FALSE}
+df_pca <- data.frame()
+df_mds <- data.frame()
+
+# Creating function to get the PCA and MDS values over time
+pca_mds_func = for (x in 1989:2014) {
+  l1 = paste("C:/Users/Hi/Desktop/STAT 670/Mini Project 2/congress/",x,"/members.csv", sep="")
+  mem <- read.csv(l1)
+  l2 = paste("C:/Users/Hi/Desktop/STAT 670/Mini Project 2/congress/",x,"/votes.csv", sep="")
+  vot <- read.csv(l2)
+  fin = merge(x = mem, y = vot, by = "id", all = TRUE)
+  vot_num = apply(fin[c(-1:-6)], 1:2, recode_votes)
+  prc <- prcomp(vot_num,scale.=FALSE)
+  test <- data.frame(prc$x[,1:2])
+  test$party <- fin$party
+  test$id <- fin$id
+  test$year <- as.numeric(x)
+  if (x %in% c(2007,2008,2013,2014)) {
+    test$PC1 <- test$PC1*-1
+    test$PC2 <- test$PC2*-1
+  }
+  df_pca <- rbind(df_pca,test)
+  d <- dist(vot_num)
+  mds_val <- cmdscale(d,k=2)
+  test2 <- data.frame(mds_val)
+  test2$party <- fin$party
+  test2$id <- fin$id
+  test2$year <- as.numeric(x)
+  if (x %in% c(2007,2008,2013,2014)) {
+    test2$X1 <- test2$X1*-1
+    test2$X2 <- test2$X2*-1
+  }
+  df_mds <- rbind(df_mds,test2)
+}
+
+pca_mds_func
+
+df_pca[df_pca$party=="D",3] <- "Democrat"
+df_pca[df_pca$party=="R",3] <- "Republican"
+df_pca[df_pca$party=="I",3] <- "Independent"
+df_pca[df_pca$party=="ID",3] <- "Independent"
+
+df_mds[df_mds$party=="D",3] <- "Democrat"
+df_mds[df_mds$party=="R",3] <- "Republican"
+df_mds[df_mds$party=="I",3] <- "Independent"
+df_mds[df_mds$party=="ID",3] <- "Independent"
+
+```
+
+```{r ,fig.width = 10, fig.height= 8, fig.align="center", echo=FALSE}
+# Visualizing the MDS values and the mean centroids for the party over time
+centroids_mds <- aggregate(cbind(X1,X2)~party+year,df_mds,mean)
+centroids_mds[centroids_mds$party=="Democrat",1] <- "Demo - Cent"
+centroids_mds[centroids_mds$party=="Independent",1] <- "Ind - Cent"
+centroids_mds[centroids_mds$party=="Republican",1] <- "Repub - Cent"
+ggplot(df_mds, aes(x=X1, y=X2, color = party)) +
+  geom_point(size=1)+ geom_point(data=centroids_mds,size=2, aes(color = party)) + facet_wrap(~year) + scale_color_manual(name = "Party", values = c("Democrat" = "blue", "Republican" = "red", "Independent" = "green", "Demo - Cent" = "orange", "Repub - Cent" = "cyan", "Ind - Cent" = "black"))
+```
+
+```{r, echo=FALSE}
+# Getting the mean and reference for the MDS centroids of each year
+
+for (i in 1989:2014) {
+  d <- centroids_mds %>% subset(party=="Demo - Cent" & year==i)
+  r <- centroids_mds %>% subset(party=="Repub - Cent" & year==i)
+  mn <- (d$X1+r$X1)/2
+  test <- data.frame(party = "Mean", year = i, X1 = mn, X2 = 0.0)
+  test2 <- data.frame(party = "Reference", year = i, X1 = 0.0, X2 = 0.0)
+  centroids_mds <- rbind(centroids_mds,test)
+  centroids_mds <- rbind(centroids_mds,test2)
+} 
+
+```
+
+
+```{r, echo=FALSE}
+
+centroids_mds %>% subset(party!='Ind - Cent') %>% ggplot(aes(x=year, y=X1, color = party)) +
+  geom_line() + scale_color_manual(name = "Labels", values = c("Demo - Cent" = "blue", "Repub - Cent" = "red", "Mean" = "purple", "Reference" = "black  "))
+```
+
+
+```{r, echo=FALSE}
+
+df_mds_new <- data.frame(year = 1:26, diff = 1:26)
+year <- c()
+diff <- c()
+
+for (i in 1989:2014) {
+  d <- centroids_mds %>% subset(year==i & party=="Demo - Cent")
+  r <- centroids_mds %>% subset(year==i & party=="Repub - Cent")
+  val <- sqrt((d$X1-r$X1)^2+(d$X2-r$X2)^2)
+  year <- c(year,i)
+  diff <- c(diff,val)
+}
+
+df_mds_new$year <- NA
+df_mds_new$year <- year
+df_mds_new$diff <- NA
+df_mds_new$diff <- diff
+
+```
+
+```{r, echo=FALSE}
+
+euclidean <- function(a, b) sqrt(sum((a$X1 - b$X1)^2)+sum((a$X2 - b$X2)^2))
+
+df_mds_new <- data.frame(year = 1:26, diff = 1:26)
+year <- c()
+diff <- c()
+
+for (i in 1989:2014) {
+  dx <- df_mds %>% subset(year==i & party=="Democrat")
+  d <- dx$X1
+  rx <- df_mds %>% subset(year==i & party=="Republican")
+  r <- rx$X1
+      
+  if (length(d) > length(r)) {
+    for (l in 1:(length(d)-length(r))) {
+      r <- c(r,0)
+    }
+  }
+  if (length(d) < length(r)) {
+    for (l in 1:(length(r)-length(d))) {
+      d <- c(d,0)
+    }
+  }
+  val <- cosine(d, r)
+  year <- c(year,i)
+  diff <- c(diff,val)
+}
+
+df_mds_new$year <- NA
+df_mds_new$year <- year
+df_mds_new$diff <- NA
+df_mds_new$diff <- diff
+
+
+```
+
+
+
+```{r, echo=FALSE}
+ggplot(df_mds_new, aes(x=year, y=(diff), color = 'black')) + geom_line()+geom_point()
+```
+
+
+
+**Measure for polarization:**
+The measure being used here to detect the polarization over time is the centroid for the clusters taking the mean. These mean centroids show how the senators from the parties are getting clustered, hence, understanding the polarization effect over time.
+
+
+**Polarization over time:**
+Yes, there has been a rise in polarization throughout time. Since we've been computing the mean centroids, we've noticed that the differences between each centroid are widening, implying that the polarization is increasing over time.
+
+
+**Is something more complicated happening?**
+Yes, it can be observed that there are complications which can be seen below:
+
+**Observations:**
+- It can be seen that before the year 2000, there were just two political parties competing in elections in the United States, which have become increasingly polarized over time. This can be observed with the rise in the difference between the mean centroids of the two parties - Democrats and Republicans.
+- In addition to this it can be seen that from the year 2001, a new party named Independent has emerged which is initially not polarized.This can be verified by looking at the 2001 graph where the mean centroid of this party is equidistant from the mean centroids of the other two parties.
+- From 2001 to 2014, we can see how the independent party, which was initially not polarized, has become increasingly polarized toward the Democrats. This could suggest that there is something else in play that is polarizing the parties.
+
+
+
+
+### **Ideological position of one senator:**
+
+
+```{r}
+john <- df_mds %>% subset(id=="S197")
+mitch <- df_mds %>% subset(id=='S174')
+john_p <- df_pca %>% subset(id=="S197")
+mitch_p <- df_pca %>% subset(id=='S174')
+df_mds_j <- df_mds %>% subset(!id=="S197")
+df_mds_m <- df_mds %>% subset(!id=="S174")
+```
+
+```{r}
+john[john$party=="Democrat",3] <- "J-D"
+john[john$party=="Independent",3] <- "J-I"
+john[john$party=="Republican",3] <- "J-R"
+ggplot(df_mds_j, aes(x=X1, y=X2, color = party)) +
+  geom_point(size=1)+ geom_point(data=john,size=2, aes(color = party)) + facet_wrap(~year) + scale_color_manual(name = "Labels", values = c("D" = "magenta", "R" = "cyan", "I" = "green", "J-D" = "blue", "J-I" = "black", "J-R" = "red"))
+```
+```{r}
+#john_p[john_p$party=="D",3] <- "J-D"
+#john_p[john_p$party=="I",3] <- "J-I"
+#john_p[john_p$party=="R",3] <- "J-R"
+#mitch_p[mitch_p$party=="D",3] <- "M-D"
+#mitch_p[mitch_p$party=="I",3] <- "M-I"
+#mitch_p[mitch_p$party=="R",3] <- "M-R"
+#ggplot(centroids_pca, aes(x=year, y=PC1, color = party)) +
+  #geom_point(size=3) + 
+#  geom_line() + geom_line(data=john_p, aes(color = party)) + geom_line(data=mitch_p, aes(color = party)) + scale_color_manual(name = "Labels", values = c("D1" = "blue", "R1" = "red", "I1" = "green", "J-R" = "black", "M-R" = "purple"))
+```
+
+```{r}
+ggplot(centroids_mds, aes(x=year, y=(X1), color = party)) +
+  #geom_point(size=3) + 
+  geom_line() + scale_color_manual(name = "Labels", values = c("Demo - Cent" = "blue", "Repub - Cent" = "red", "Ind - Cent" = "green"))
+```
+
+
+
+```{r}
+john[john$party=="D",3] <- "J-D"
+john[john$party=="I",3] <- "J-I"
+john[john$party=="R",3] <- "J-R"
+mitch[mitch$party=="D",3] <- "M-D"
+mitch[mitch$party=="I",3] <- "M-I"
+mitch[mitch$party=="R",3] <- "M-R"
+ggplot(centroids_mds, aes(x=year, y=X1, color = party)) +
+  #geom_point(size=3) + 
+  geom_line() + geom_line(data=john, aes(color = party)) + geom_line(data=mitch, aes(color = party)) + scale_color_manual(name = "Labels", values = c("D1" = "blue", "R1" = "red", "I1" = "green", "J-R" = "black", "M-R" = "purple"))
+```
+
+
+
+```{r}
+mitch[mitch$party=="D",3] <- "M-D"
+mitch[mitch$party=="I",3] <- "M-I"
+mitch[mitch$party=="R",3] <- "M-R"
+ggplot(df_mds_m, aes(x=X1, y=X2, color = party)) +
+  geom_point(size=1)+ geom_point(data=mitch,size=2, aes(color = party)) + facet_wrap(~year) + scale_color_manual(name = "Labels", values = c("D" = "magenta", "R" = "cyan", "I" = "green", "M-D" = "blue", "M-I" = "black", "M-R" = "red"))
+```
+
+
+```{r}
+
+```
+
+
+#### **Appendix:**
+
+
+```{r Q1 - PCA, echo=FALSE}
+# Applying PCA
+prcomp_1989<-prcomp(votes_numeric_1989,scale.=FALSE)
+prcomp_2014<-prcomp(votes_numeric_2014,scale.=FALSE)
+```
+
+```{r Q1 - PCA P1, fig.align="center", fig.width = 8, fig.height= 6, echo=FALSE}
+# visualizing the PCA for 1989 Data
+ggplot(data.frame(prcomp_1989$x), aes(x = PC1, y = PC2, color = fin_1989$party)) +
+  geom_point() +  labs(x = "Principal Component 1", y = "Principal Component 2", title = "Scatter plot of projected points of Senators in 1989") + scale_color_manual(name = "Party", values = c("Democrat" = "blue", "Republican" = "red")) 
+```
+
+```{r Q1 - PCA P2, fig.align="center", fig.width = 8, fig.height= 6, echo=FALSE}
+# visualizing the PCA for 2014 Data
+ggplot(data.frame(prcomp_2014$x), aes(x = PC1, y = PC2, color = fin_2014$party)) +
+  geom_point() +  labs(x = "Principal Component 1", y = "Principal Component 2", title = "Scatter plot of projected points of Senators in 2014") + scale_color_manual(name = "Party", values = c("Democrat" = "blue", "Republican" = "red", "Independent" = "green")) 
+```
+
+```{r Q2 - PCA,fig.width = 12, fig.height= 10, fig.align="center", echo=FALSE}
+# Visualizing the PCA values and the mean centroids for the party over time
+centroids_pca <- aggregate(cbind(PC1,PC2)~party+year,df_pca,mean)
+centroids_pca[centroids_pca$party=="Democrat",1] <- "Demo - Cent"
+centroids_pca[centroids_pca$party=="Independent",1] <- "Ind - Cent"
+centroids_pca[centroids_pca$party=="Republican",1] <- "Repub - Cent"
+ggplot(df_mds, aes(x=X1, y=X2, color = party)) +
+  geom_point(size=1)+ geom_point(data=centroids_mds,size=2, aes(color = party)) + facet_wrap(~year) + scale_color_manual(name = "Party", values = c("Democrat" = "blue", "Republican" = "red", "Independent" = "green", "Demo - Cent" = "orange", "Repub - Cent" = "cyan", "Ind - Cent" = "black"))
+```
+
+
+
